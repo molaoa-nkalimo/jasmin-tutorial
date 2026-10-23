@@ -139,8 +139,8 @@ sorted *obliviously*: the sequence of instructions and memory accesses must not
 depend on the contents of the blocks. `sort.c` implements an odd-even merge
 sort whose comparisons and swaps are done with masks instead of branches.
 
-The Jasmin implementation was derived step by step from the assembly GCC
-generated for `sort.c`:
+Starting from the `-O3` assembly of `sort.c`, we derived the Jasmin
+implementation step by step:
 
 1. `sort.c`: the original C code.
 2. `sort_asm_to_c.c`: a literal translation of the assembly back into C, one
@@ -151,10 +151,6 @@ generated for `sort.c`:
 5. `sort.jazz`, `comp_and_swap.jinc` and `msort.jinc`: the translation of
    `sort_high_level.c` into Jasmin. The names of the variables still refer to
    the registers GCC used.
-
-Files 2 to 4 were written from the output of a particular version of GCC: with
-yours, `make` generates a `sort.s` that may differ. They are a worked example
-of the method rather than something you should reproduce exactly.
 
 **Exercise.** `_comp_and_swap_64` (in `comp_and_swap.jinc`) swaps two blocks of
 170 words one 64-bit word at a time, as GCC does. Complete

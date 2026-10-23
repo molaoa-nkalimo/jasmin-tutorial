@@ -13,6 +13,5 @@ from-c/optimization/matrixO0.s
 from-c/optimization/matrixO3.s
 from-c/optimization/test
 from-c/optimization/test_solution
-from-c/sort/sort.s
 from-c/sort/test
 from-c/sort/test_solution

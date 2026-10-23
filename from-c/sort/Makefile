@@ -4,7 +4,7 @@ JAZZ_INCLUDES = comp_and_swap.jinc msort.jinc
 
 .PHONY: all run run-solution ct clean
 
-all: sort.s test
+all: test
 
 run: test
 	./test
@@ -16,17 +16,14 @@ run-solution: test_solution
 ct:
 	jasmin-ct --doit sort.jazz
 
-sort.s: sort.c
-	$(CC) -O3 -S -o $@ $<
-
 %_jazz.s: %.jazz $(JAZZ_INCLUDES)
 	$(JASMINC) $(JASMIN_FLAGS) -o $@ $<
 
-test: test.c sort.s sort_jazz.s
+test: test.c sort.c sort_jazz.s
 	$(CC) $(CFLAGS) -o $@ $^
 
-test_solution: test.c sort.s sort_solution_jazz.s
+test_solution: test.c sort.c sort_solution_jazz.s
 	$(CC) $(CFLAGS) -o $@ $^
 
 clean:
-	rm -f sort.s *_jazz.s test test_solution
+	rm -f *_jazz.s test test_solution
