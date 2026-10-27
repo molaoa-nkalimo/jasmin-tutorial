@@ -10,10 +10,22 @@
    won't work because y will have been used after the call and won't be valid
    for the addition.
    The second argument is a compile-time integer. */
+   
 inline
 fn rotate(reg u32 x, inline int bits) -> reg u32 {
-    x = x <<r bits;
-    return x; // You can only return variables, not expressions.
+    reg u32 a;
+    reg u32 c;
+    reg u32 d;
+    reg u32 y;
+    
+    a = x;
+    
+    //Both the rotate operations must be done on the original value of x.
+    c = x <<r bits; //stores rotate left results
+    d = a >>r (32-bits); //stores rotate right results
+    y = c | d; //performs bitwise OR on the shifted values.
+    
+    return y; // You can only return variables, not expressions.
 }
 
 /* Each Jasmin instruction needs to correspond to an assembly instruction. You
@@ -30,9 +42,19 @@ fn rotate(reg u32 x, inline int bits) -> reg u32 {
    variable afterwards, the compiler will fail if you try. In the case of x86,
    where things get overwritten, the caller won't see the modified value; it
    only sees an unusable variable. */
+
 fn sbox1(reg u32 x y z) -> reg u32 {
     reg u32 r;
-    r = 0;
+    reg u32 a;
+    reg u32 b;
+    
+    a = y & z;
+    a <<= 2;
+    b = z << 1;
+    //XOR is left associative: x ^ (z << 1) ^ ((y & z) << 2) == (x ^ (z << 1)) ^ ((y & z) << 2)
+    //To avoid compilation error, break down the bitwise XOR computation of r into smaller steps.
+    r = x ^ b;
+    r ^= a;
     return r;
 }
 
@@ -53,15 +75,45 @@ fn sbox1(reg u32 x y z) -> reg u32 {
      ?{ "<=u" = b }, <dst> = #XOR_<size>(<op1>, <op2>);
    which is JMPbe.
    Intrinsics are always in all caps. */
+   
 fn sbox2(reg u32 x y z) -> reg u32 {
     reg u32 r;
-    r = 0;
+    reg u32 a;
+    reg u32 b;
+    
+    //Firstly, compute bitwise XOR of y ^ x
+    //This is because only y (op1) is consumed. x (op2) is left unconsumed and so can be used again for the OR computation.
+    ?{}, r = #XOR_32(y, x);
+    
+    //Secondly,  compute bitwise x OR z
+    a = x | z;
+    
+    //Thirdly,compute bitwise left shift of (bitwise x OR z) BY 1
+    b = a << 1;
+    
+    //Lastly, compute bitwise XOR of (y ^ x) ^ ((x y) << 1)
+    ?{}, r = #XOR_32(r, b);
+    
     return r;
 }
 
 fn sbox3(reg u32 x y z) -> reg u32 {
     reg u32 r;
-    r = 0;
+    reg u32 a;
+    reg u32 b;
+    
+    //Firstly, compute x & y
+    a = x & y;
+    
+    //Secondly, shift x & y left by 3
+    b = a << 3;
+    
+    //Thirdly, compute z ^ y
+    r = z ^ y;
+    
+    //Lastly, compute (z ^ y) ^ ((x & y) << 3)
+    r ^= b;
+    
     return r;
 }
 
@@ -70,15 +122,63 @@ fn sbox3(reg u32 x y z) -> reg u32 {
    annotation as in the jazz_gimli.jazz file.
    Remember that if a function consumes its argument, the caller can no longer
    use the variable. */
+   
 fn sbox(reg ptr u32[12] state, reg u64 column) -> reg ptr u32[12] {
-    return state; // We must return the pointer since we modified the contents.
+  reg u32 x;
+  reg u32 y;
+  reg u32 z;
+  reg u32 x1;
+  reg u32 y1;
+  reg u32 z1;
+  reg u32 x2;
+  reg u32 y2;
+  reg u32 z2;
+  
+  x = rotate(state[column], 24);
+  
+  y = rotate(state[column + 4], 9);
+  
+  z =  state[column + 8];
+  
+  x1 =x;
+  x2 = x;
+  y1 = y;
+  y2 = y;
+  z1 = z;
+  z2 = z;
+  
+  #[inline] state[column + 8] = sbox1(x, y, z);
+  #[inline] state[column + 4] = sbox2(x1, y1, z1);
+  #[inline] state[column] = sbox3(x2, y2, z2);
+  
+  return state; // We must return the pointer since we modified the contents.
 }
 
 fn small_swap(reg ptr u32[12] state) -> reg ptr u32[12] {
+    reg u32 x;
+    x = state[0];
+    
+    state[0] = state[1];
+    state [1] = x;
+    
+    x = state [2];
+    state [2] = state [3];
+    state [3] = x;
+    
     return state; // We must return the pointer since we modified the contents.
 }
 
 fn big_swap(reg ptr u32[12] state) -> reg ptr u32[12] {
+    reg u32 x;
+    x = state[0];
+    
+    state[0] = state[2];
+    state [2] = x;
+    
+    x = state [1];
+    state [1] = state [3];
+    state [3] = x;
+    
     return state; // We must return the pointer since we modified the contents.
 }
 
@@ -100,6 +200,30 @@ fn big_swap(reg ptr u32[12] state) -> reg ptr u32[12] {
    ints, i.e., things that the compiler statically knows the value of.
    Modifying the iterator variable inside a for loop has no effect on the number
    of iterations or the value of the variable in the next iteration. */
+   
 fn gimli(reg ptr u32[12] state) -> reg ptr u32[12] {
+    reg u32 temp;
+    inline int round;
+    inline int column;
+    
+    for round = 24 downto 0 {
+      for column = 0 to 4 {
+        #[inline] state = sbox (state, column);
+      }
+      
+      if ((round & 3) == 0) {
+        #[inline] state = small_swap (state);
+      } 
+      
+      if ((round & 3) == 2) {
+        #[inline] state = big_swap (state);
+      }
+      
+      if ((round & 3) == 0) {
+        temp = 0x9e377900 + round;
+        state[0] ^= temp;
+      }
+    }
+    
     return state; // We must return the pointer since we modified the contents.
 }
